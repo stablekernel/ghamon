@@ -49,6 +49,8 @@ type fetchedRepoMsg struct {
 	err   error
 }
 
+type resetProgressMsg struct{}
+
 type tickMsg time.Time
 
 func newModel(workflow string, repos []string, rate int, token string) model {
@@ -170,6 +172,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.index < len(m.repos) {
 			return m, m.fetchRepo(msg.index)
 		}
+	case resetProgressMsg:
+		m.fetchProgress = 0
 	case fetchedRepoMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -183,8 +187,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, func() tea.Msg { return fetchNextMsg{index: msg.index + 1} }
 			}
 			m.fetching = false
-			m.fetchProgress = 0
 			m.err = nil
+			return m, tea.Tick(500*time.Millisecond, func(t time.Time) tea.Msg {
+				return resetProgressMsg{}
+			})
 		}
 		m.clampScroll()
 	}
