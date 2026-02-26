@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 const defaultBaseURL = "https://api.github.com"
 
 // WorkflowRun represents a GitHub Actions workflow run.
 type WorkflowRun struct {
+	WorkflowID int    `json:"workflow_id"`
 	Name       string `json:"name"`
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
@@ -69,4 +71,53 @@ func (c *GitHubClient) FetchWorkflowRun(repo, workflow string) (*WorkflowRun, er
 	}
 
 	return nil, nil
+}
+
+// FetchWorkflowRuns fetches the most recent run of each distinct workflow for a repository.
+func (c *GitHubClient) FetchWorkflowRuns(repo string) ([]WorkflowRun, error) {
+	url := fmt.Sprintf("%s/repos/%s/actions/runs?per_page=50", c.BaseURL, repo)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+	req.Header.Set("Authorization", "token "+c.Token)
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetching runs for %s: %w", repo, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned %d for %s", resp.StatusCode, repo)
+	}
+
+	var result workflowRunsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decoding response for %s: %w", repo, err)
+	}
+
+	// Collect the most recent run per distinct workflow.
+	// The API returns runs in reverse chronological order, so the first
+	// occurrence of each workflow_id is the most recent. Deduplicate on
+	// workflow_id because the same workflow can appear under different
+	// names (e.g. "Build" vs ".github/workflows/build.yaml").
+	seen := make(map[int]bool)
+	var runs []WorkflowRun
+	for _, run := range result.WorkflowRuns {
+		if !seen[run.WorkflowID] {
+			seen[run.WorkflowID] = true
+			run.Name = cleanWorkflowName(run.Name)
+			runs = append(runs, run)
+		}
+	}
+
+	return runs, nil
+}
+
+// cleanWorkflowName strips the ".github/workflows/" prefix from a workflow name.
+func cleanWorkflowName(name string) string {
+	return strings.TrimPrefix(name, ".github/workflows/")
 }

@@ -21,22 +21,23 @@ const headerLines = 3
 const footerLines = 2
 
 type workflowInfo struct {
-	Repo   string
-	Status string
+	Repo     string
+	Workflow string
+	Status   string
 }
 
 type model struct {
-	workflow       string
-	repos          []string
-	rate           int
-	client         *GitHubClient
-	runs           []workflowInfo
-	err            error
-	fetching       bool
-	fetchProgress  int
-	windowWidth    int
-	windowHeight   int
-	scrollOffset   int
+	workflow      string
+	repos         []string
+	rate          int
+	client        *GitHubClient
+	runs          [][]workflowInfo
+	err           error
+	fetching      bool
+	fetchProgress int
+	windowWidth   int
+	windowHeight  int
+	scrollOffset  int
 }
 
 type fetchNextMsg struct {
@@ -45,7 +46,7 @@ type fetchNextMsg struct {
 
 type fetchedRepoMsg struct {
 	index int
-	info  *workflowInfo
+	infos []workflowInfo
 	err   error
 }
 
@@ -64,10 +65,10 @@ func newModel(workflow string, repos []string, rate int, token string) model {
 	}
 }
 
-func placeholderRuns(repos []string) []workflowInfo {
-	runs := make([]workflowInfo, len(repos))
+func placeholderRuns(repos []string) [][]workflowInfo {
+	runs := make([][]workflowInfo, len(repos))
 	for i, repo := range repos {
-		runs[i] = workflowInfo{Repo: repo, Status: "..."}
+		runs[i] = []workflowInfo{{Repo: repo, Status: "..."}}
 	}
 	return runs
 }
@@ -93,18 +94,40 @@ func (m model) fetchRepo(index int) tea.Cmd {
 	workflow := m.workflow
 	client := m.client
 	return func() tea.Msg {
-		run, err := client.FetchWorkflowRun(repo, workflow)
+		if workflow != "" {
+			// Single-workflow mode.
+			run, err := client.FetchWorkflowRun(repo, workflow)
+			if err != nil {
+				return fetchedRepoMsg{index: index, err: err}
+			}
+			var infos []workflowInfo
+			if run != nil {
+				infos = []workflowInfo{{
+					Repo:     repo,
+					Workflow: run.Name,
+					Status:   formatStatus(run.Status, run.Conclusion),
+				}}
+			}
+			return fetchedRepoMsg{index: index, infos: infos}
+		}
+
+		// All-workflows mode.
+		runs, err := client.FetchWorkflowRuns(repo)
 		if err != nil {
 			return fetchedRepoMsg{index: index, err: err}
 		}
-		var info *workflowInfo
-		if run != nil {
-			info = &workflowInfo{
-				Repo:   repo,
-				Status: formatStatus(run.Status, run.Conclusion),
+		var infos []workflowInfo
+		for _, run := range runs {
+			if strings.HasPrefix(run.Name, "Graph Update") || strings.HasPrefix(run.Name, "go_modules") {
+				continue
 			}
+			infos = append(infos, workflowInfo{
+				Repo:     repo,
+				Workflow: run.Name,
+				Status:   formatStatus(run.Status, run.Conclusion),
+			})
 		}
-		return fetchedRepoMsg{index: index, info: info}
+		return fetchedRepoMsg{index: index, infos: infos}
 	}
 }
 
@@ -115,9 +138,27 @@ func formatStatus(status, conclusion string) string {
 	return status
 }
 
+// flatRuns returns a flattened view of all workflow info rows across all repos.
+func (m model) flatRuns() []workflowInfo {
+	var flat []workflowInfo
+	for _, repoRuns := range m.runs {
+		flat = append(flat, repoRuns...)
+	}
+	return flat
+}
+
+// totalRows returns the total number of display rows across all repos.
+func (m model) totalRows() int {
+	total := 0
+	for _, repoRuns := range m.runs {
+		total += len(repoRuns)
+	}
+	return total
+}
+
 func (m *model) clampScroll() {
 	maxRows := m.contentHeight()
-	totalRows := len(m.runs)
+	totalRows := m.totalRows()
 	maxOffset := totalRows - maxRows
 	if maxOffset < 0 {
 		maxOffset = 0
@@ -179,8 +220,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 			m.fetching = false
 		} else {
-			if msg.info != nil {
-				m.runs[msg.index] = *msg.info
+			if msg.infos != nil {
+				m.runs[msg.index] = msg.infos
 			}
 			m.fetchProgress = msg.index + 1
 			if msg.index+1 < len(m.repos) {
@@ -211,26 +252,38 @@ func (m model) View() string {
 
 	// Header
 	b.WriteString(titleStyle.Render("GHA Monitor"))
-	b.WriteString(fmt.Sprintf("  Workflow: %s  Refresh: %ds", m.workflow, m.rate))
+	if m.workflow != "" {
+		b.WriteString(fmt.Sprintf("  Workflow: %s", m.workflow))
+	}
+	b.WriteString(fmt.Sprintf("  Refresh: %ds", m.rate))
 	b.WriteString(fmt.Sprintf("  %s %d/%d",
 		renderProgressBar(m.fetchProgress, len(m.repos), 20),
 		m.fetchProgress, len(m.repos)))
 	b.WriteString("\n\n")
 
 	// Content
+	flat := m.flatRuns()
 	if m.err != nil {
 		b.WriteString(fmt.Sprintf("Error: %v\n", m.err))
 	} else {
-		b.WriteString(fmt.Sprintf("%-40s %s\n", "REPOSITORY", "STATUS"))
+		if m.workflow != "" {
+			b.WriteString(fmt.Sprintf("%-40s %s\n", "REPOSITORY", "STATUS"))
+		} else {
+			b.WriteString(fmt.Sprintf("%-40s %-25s %s\n", "REPOSITORY", "WORKFLOW", "STATUS"))
+		}
 
 		maxRows := m.contentHeight()
 		end := m.scrollOffset + maxRows
-		if end > len(m.runs) {
-			end = len(m.runs)
+		if end > len(flat) {
+			end = len(flat)
 		}
-		visible := m.runs[m.scrollOffset:end]
+		visible := flat[m.scrollOffset:end]
 		for _, r := range visible {
-			b.WriteString(fmt.Sprintf("%-40s %s\n", r.Repo, r.Status))
+			if m.workflow != "" {
+				b.WriteString(fmt.Sprintf("%-40s %s\n", r.Repo, r.Status))
+			} else {
+				b.WriteString(fmt.Sprintf("%-40s %-25s %s\n", r.Repo, r.Workflow, r.Status))
+			}
 		}
 	}
 
@@ -242,8 +295,8 @@ func (m model) View() string {
 	} else {
 		contentRendered = 1 // column header
 		end := m.scrollOffset + m.contentHeight()
-		if end > len(m.runs) {
-			end = len(m.runs)
+		if end > len(flat) {
+			end = len(flat)
 		}
 		contentRendered += end - m.scrollOffset
 	}
@@ -254,7 +307,7 @@ func (m model) View() string {
 
 	// Footer
 	b.WriteString("\n")
-	b.WriteString(footerStyle.Render("Press 'q' to quit, 'r' to refresh"))
+	b.WriteString(footerStyle.Render("q: quit | r: refresh"))
 
 	return b.String()
 }

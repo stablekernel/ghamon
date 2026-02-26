@@ -20,8 +20,8 @@ func main() {
 	flag.BoolVar(&help, "help", false, "Show help message and exit")
 	flag.IntVar(&rate, "r", 30, "Refresh rate in seconds")
 	flag.IntVar(&rate, "rate", 30, "Refresh rate in seconds")
-	flag.StringVar(&workflow, "w", "Build", "GitHub Actions workflow to monitor")
-	flag.StringVar(&workflow, "workflow", "Build", "GitHub Actions workflow to monitor")
+	flag.StringVar(&workflow, "w", "", "GitHub Actions workflow to monitor (default: all)")
+	flag.StringVar(&workflow, "workflow", "", "GitHub Actions workflow to monitor (default: all)")
 	flag.Parse()
 
 	if help {
@@ -68,7 +68,7 @@ func printUsage() {
 	fmt.Println("  -c, --config     Path to configuration file (default: $HOME/.ghamon/default)")
 	fmt.Println("  -h, --help       Show help message and exit")
 	fmt.Println("  -r, --rate       Refresh rate in seconds (default: 30)")
-	fmt.Println("  -w, --workflow   GitHub Actions workflow to monitor (default: Build)")
+	fmt.Println("  -w, --workflow   GitHub Actions workflow to monitor (default: all)")
 	fmt.Println()
 	fmt.Println("Arguments:")
 	fmt.Println("  repo             GitHub repository in the format owner/repo")
