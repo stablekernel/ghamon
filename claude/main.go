@@ -57,6 +57,6 @@ func printUsage() {
 	fmt.Println("  -w, --workflow   GitHub Actions workflow to monitor (default: all)")
 	fmt.Println()
 	fmt.Println("Arguments:")
-	fmt.Println("  repository       owner/repo, or @file containing repos one per line")
-	fmt.Println("                   (default: current git repository)")
+	fmt.Println("  repository       owner/repo, or @file (file in ~/.ghamon) containing")
+	fmt.Println("                   repos one per line (default: current git repository)")
 }

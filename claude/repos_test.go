@@ -91,6 +91,14 @@ func TestLoadReposFromFile(t *testing.T) {
 	})
 }
 
+func TestGhamonFilePath(t *testing.T) {
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+
+	assert.Equal(t, home+"/.ghamon/myrepos", ghamonFilePath("myrepos"))
+	assert.Equal(t, home+"/.ghamon/work-repos", ghamonFilePath("work-repos"))
+}
+
 func TestResolveRepos(t *testing.T) {
 	t.Run("returns direct repo args", func(t *testing.T) {
 		repos, err := ResolveRepos([]string{"owner1/repo1", "owner2/repo2"})
@@ -98,22 +106,36 @@ func TestResolveRepos(t *testing.T) {
 		assert.Equal(t, []string{"owner1/repo1", "owner2/repo2"}, repos)
 	})
 
-	t.Run("expands @file argument", func(t *testing.T) {
-		path := writeTempFile(t, "owner1/repo1\nowner2/repo2\n")
-		repos, err := ResolveRepos([]string{"@" + path})
+	t.Run("expands @file argument from ~/.ghamon", func(t *testing.T) {
+		home, err := os.UserHomeDir()
+		require.NoError(t, err)
+		dir := filepath.Join(home, ".ghamon")
+		require.NoError(t, os.MkdirAll(dir, 0755))
+		path := filepath.Join(dir, "test-repos")
+		require.NoError(t, os.WriteFile(path, []byte("owner1/repo1\nowner2/repo2\n"), 0644))
+		t.Cleanup(func() { os.Remove(path) })
+
+		repos, err := ResolveRepos([]string{"@test-repos"})
 		require.NoError(t, err)
 		assert.Equal(t, []string{"owner1/repo1", "owner2/repo2"}, repos)
 	})
 
 	t.Run("mixes direct repos and @file", func(t *testing.T) {
-		path := writeTempFile(t, "owner2/repo2\n")
-		repos, err := ResolveRepos([]string{"owner1/repo1", "@" + path})
+		home, err := os.UserHomeDir()
+		require.NoError(t, err)
+		dir := filepath.Join(home, ".ghamon")
+		require.NoError(t, os.MkdirAll(dir, 0755))
+		path := filepath.Join(dir, "test-repos-mix")
+		require.NoError(t, os.WriteFile(path, []byte("owner2/repo2\n"), 0644))
+		t.Cleanup(func() { os.Remove(path) })
+
+		repos, err := ResolveRepos([]string{"owner1/repo1", "@test-repos-mix"})
 		require.NoError(t, err)
 		assert.Equal(t, []string{"owner1/repo1", "owner2/repo2"}, repos)
 	})
 
 	t.Run("returns error for missing @file", func(t *testing.T) {
-		_, err := ResolveRepos([]string{"@/nonexistent/file"})
+		_, err := ResolveRepos([]string{"@nonexistent-file"})
 		assert.Error(t, err)
 	})
 }

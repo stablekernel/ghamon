@@ -19,7 +19,7 @@ Arguments:
 
 - repository -- GitHub repository as `<owner>/<repo>` or `@<file>`:
   - `<owner>/<repo>` -- single repository
-  - `@<file>` -- file containing a list of repositories, one per line
+  - `@<file>` -- file in ~/.ghamon containing a list of repositories, one per line
   - default: current repository (if current directory is a git repository)
 
 Note: If no repositories are provided and the current directory is not a git repository, an error message and usage information are printed.

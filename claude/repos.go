@@ -23,10 +23,14 @@ func ResolveRepos(args []string) ([]string, error) {
 	var repos []string
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "@") {
-			path := expandHome(arg[1:])
+			name := arg[1:]
+			path := ghamonFilePath(name)
 			fileRepos, err := LoadReposFromFile(path)
 			if err != nil {
-				return nil, fmt.Errorf("reading %s: %w", path, err)
+				if os.IsNotExist(err) {
+					return nil, fmt.Errorf("repository file not found: ~/.ghamon/%s", name)
+				}
+				return nil, fmt.Errorf("reading ~/.ghamon/%s: %w", name, err)
 			}
 			repos = append(repos, fileRepos...)
 		} else {
@@ -63,16 +67,13 @@ func parseGitHubRepo(remoteURL string) (string, error) {
 	return parts[0] + "/" + parts[1], nil
 }
 
-// expandHome replaces a leading ~ with the user's home directory.
-func expandHome(path string) string {
-	if strings.HasPrefix(path, "~/") || path == "~" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return path
-		}
-		return home + path[1:]
+// ghamonFilePath returns the full path to a file in the ~/.ghamon directory.
+func ghamonFilePath(name string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return name
 	}
-	return path
+	return home + "/.ghamon/" + name
 }
 
 // LoadReposFromFile reads repository names from a file, one per line.
