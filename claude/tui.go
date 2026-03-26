@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -27,17 +28,18 @@ type workflowInfo struct {
 }
 
 type model struct {
-	workflow      string
-	repos         []string
-	rate          int
-	client        *GitHubClient
-	runs          [][]workflowInfo
-	err           error
-	fetching      bool
-	fetchProgress int
-	windowWidth   int
-	windowHeight  int
-	scrollOffset  int
+	workflow       string
+	repos          []string
+	rate           int
+	client         *GitHubClient
+	runs           [][]workflowInfo
+	err            error
+	fetching       bool
+	fetchProgress  int
+	windowWidth    int
+	windowHeight   int
+	scrollOffset   int
+	animationFrame int
 }
 
 type fetchNextMsg struct {
@@ -51,6 +53,8 @@ type fetchedRepoMsg struct {
 }
 
 type resetProgressMsg struct{}
+
+type animationTickMsg struct{}
 
 type tickMsg time.Time
 
@@ -74,7 +78,13 @@ func placeholderRuns(repos []string) [][]workflowInfo {
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.startFetch(), m.tick())
+	return tea.Batch(m.startFetch(), m.tick(), m.animationTick())
+}
+
+func (m model) animationTick() tea.Cmd {
+	return tea.Tick(500*time.Millisecond, func(t time.Time) tea.Msg {
+		return animationTickMsg{}
+	})
 }
 
 func (m model) tick() tea.Cmd {
@@ -127,6 +137,9 @@ func (m model) fetchRepo(index int) tea.Cmd {
 				Status:   formatStatus(run.Status, run.Conclusion),
 			})
 		}
+		sort.Slice(infos, func(i, j int) bool {
+			return infos[i].Workflow < infos[j].Workflow
+		})
 		return fetchedRepoMsg{index: index, infos: infos}
 	}
 }
@@ -213,6 +226,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.index < len(m.repos) {
 			return m, m.fetchRepo(msg.index)
 		}
+	case animationTickMsg:
+		m.animationFrame = (m.animationFrame + 1) % 4
+		return m, m.animationTick()
 	case resetProgressMsg:
 		m.fetchProgress = 0
 	case fetchedRepoMsg:
@@ -252,9 +268,6 @@ func (m model) View() string {
 
 	// Header
 	b.WriteString(titleStyle.Render("GHA Monitor"))
-	if m.workflow != "" {
-		b.WriteString(fmt.Sprintf("  Workflow: %s", m.workflow))
-	}
 	b.WriteString(fmt.Sprintf("  Refresh: %ds", m.rate))
 	b.WriteString(fmt.Sprintf("  %s %d/%d",
 		renderProgressBar(m.fetchProgress, len(m.repos), 20),
@@ -266,24 +279,21 @@ func (m model) View() string {
 	if m.err != nil {
 		b.WriteString(fmt.Sprintf("Error: %v\n", m.err))
 	} else {
-		if m.workflow != "" {
-			b.WriteString(fmt.Sprintf("%-40s %s\n", "REPOSITORY", "STATUS"))
-		} else {
-			b.WriteString(fmt.Sprintf("%-40s %-25s %s\n", "REPOSITORY", "WORKFLOW", "STATUS"))
-		}
+		b.WriteString(fmt.Sprintf("%-40s %-25s %s\n", "REPOSITORY", "WORKFLOW", "STATUS"))
 
 		maxRows := m.contentHeight()
 		end := m.scrollOffset + maxRows
 		if end > len(flat) {
 			end = len(flat)
 		}
+		animSuffix := strings.Repeat(".", m.animationFrame)
 		visible := flat[m.scrollOffset:end]
 		for _, r := range visible {
-			if m.workflow != "" {
-				b.WriteString(fmt.Sprintf("%-40s %s\n", r.Repo, r.Status))
-			} else {
-				b.WriteString(fmt.Sprintf("%-40s %-25s %s\n", r.Repo, r.Workflow, r.Status))
+			status := r.Status
+			if status == "in_progress" || status == "queued" {
+				status = status + " " + animSuffix
 			}
+			b.WriteString(fmt.Sprintf("%-40s %-25s %s\n", r.Repo, r.Workflow, status))
 		}
 	}
 

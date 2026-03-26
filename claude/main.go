@@ -8,20 +8,18 @@ import (
 
 func main() {
 	var (
-		configPath string
-		help       bool
-		rate       int
-		workflow   string
+		help     bool
+		rate     int
+		workflow string
 	)
 
-	flag.StringVar(&configPath, "c", "", "Path to configuration file")
-	flag.StringVar(&configPath, "config", "", "Path to configuration file")
 	flag.BoolVar(&help, "h", false, "Show help message and exit")
 	flag.BoolVar(&help, "help", false, "Show help message and exit")
 	flag.IntVar(&rate, "r", 30, "Refresh rate in seconds")
 	flag.IntVar(&rate, "rate", 30, "Refresh rate in seconds")
 	flag.StringVar(&workflow, "w", "", "GitHub Actions workflow to monitor (default: all)")
 	flag.StringVar(&workflow, "workflow", "", "GitHub Actions workflow to monitor (default: all)")
+	flag.Usage = printUsage
 	flag.Parse()
 
 	if help {
@@ -35,20 +33,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	repos := flag.Args()
-
-	if len(repos) == 0 {
-		if configPath == "" {
-			configPath = DefaultConfigPath()
-		}
-		configRepos, err := LoadConfigFromFile(configPath)
-		if err == nil && len(configRepos) > 0 {
-			repos = configRepos
-		}
-	}
-
-	if len(repos) == 0 {
-		fmt.Fprintln(os.Stderr, "Error: no repositories specified")
+	repos, err := ResolveRepos(flag.Args())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
 		printUsage()
 		os.Exit(1)
 	}
@@ -60,16 +47,16 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println("Usage: ghamon [options] [repo]...")
+	fmt.Println("Usage: ghamon [options] [repository]...")
 	fmt.Println()
 	fmt.Println("GHA Monitor - Monitor GitHub Actions workflows")
 	fmt.Println()
 	fmt.Println("Options:")
-	fmt.Println("  -c, --config     Path to configuration file (default: $HOME/.ghamon/default)")
 	fmt.Println("  -h, --help       Show help message and exit")
 	fmt.Println("  -r, --rate       Refresh rate in seconds (default: 30)")
 	fmt.Println("  -w, --workflow   GitHub Actions workflow to monitor (default: all)")
 	fmt.Println()
 	fmt.Println("Arguments:")
-	fmt.Println("  repo             GitHub repository in the format owner/repo")
+	fmt.Println("  repository       owner/repo, or @file containing repos one per line")
+	fmt.Println("                   (default: current git repository)")
 }

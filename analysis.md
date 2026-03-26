@@ -2,12 +2,12 @@
 
 ## Prompt
 
-Compare the code in this directory to the code in the ghamon-copilot directory, then tell me which
-is a better implementation of the design in README.md and why.
+Compare the code in the claude directory to the code in the copilot directory, then tell me which
+is a better implementation of the design in spec.md and why.
 
 ## Response
 
-### Verdict: The main (root) implementation is a better implementation of the README.md design.
+### Verdict: The main (root) implementation is a better implementation of the spec.md design.
 
 While the copilot version has some nice engineering qualities, the main version more faithfully
 implements the specification. Here's why:
@@ -15,7 +15,7 @@ implements the specification. Here's why:
 ### Three spec requirements the copilot version misses
 
 **1. Workflow filtering is absent.**
-The README says: *"Workflows that start with 'Graph Update' or 'go_modules' are not displayed."*
+The spec.md says: *"Workflows that start with 'Graph Update' or 'go_modules' are not displayed."*
 The main version explicitly filters these at `tui.go:121-123`:
 
 ```go
@@ -27,7 +27,7 @@ if strings.HasPrefix(run.Name, "Graph Update") || strings.HasPrefix(run.Name, "g
 The copilot version has no such filtering anywhere.
 
 **2. The progress bar doesn't show real fetch progress.**
-The README says: *"The progress bar shown in the header is refreshed during data retrieval to
+The spec.md says: *"The progress bar shown in the header is refreshed during data retrieval to
 provide visual feedback."* The main version uses a sequential fetch pattern — it fetches repos
 one-by-one, updating the progress bar after each (`fetchProgress = msg.index + 1`), showing actual
 `[████░░░░] 2/5` counts. The copilot version fetches all repos in a single blocking goroutine
@@ -36,7 +36,7 @@ one-by-one, updating the progress bar after each (`fetchProgress = msg.index + 1
 progress.
 
 **3. Mage targets don't show command output.**
-The README says: *"Targets show command output."* The main version uses `sh.RunV()` (the `V` suffix
+The spec.md says: *"Targets show command output."* The main version uses `sh.RunV()` (the `V` suffix
 means "verbose" — prints command output to stdout). The copilot version uses `sh.Run()`, which
 suppresses output.
 
@@ -60,4 +60,4 @@ The main version is simpler but more spec-compliant. It implements all the state
 including the specific filtering rules, incremental progress feedback, and verbose Mage output. The
 copilot version has better software engineering practices (interface-based design, package
 separation, error resilience, color styling) but misses three explicit specification requirements.
-In terms of "which better implements the design in README.md," the main version wins.
+In terms of "which better implements the design in spec.md," the main version wins.
