@@ -4,5 +4,5 @@ GHA Monitor (ghamon) is a TUI program that monitors GitHub Actions workflows for
 
 ## Implementations
 
-- [Claude](claude/spec.md)
-- [Copilot](copilot/spec.md)
+- [Claude](claude/SPEC.md)
+- [Copilot](copilot/SPEC.md)
