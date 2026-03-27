@@ -1,4 +1,4 @@
-package main
+package ghamon
 
 import (
 	"encoding/json"

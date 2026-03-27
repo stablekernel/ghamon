@@ -11,7 +11,7 @@ import (
 
 // Build builds the ghamon binary.
 func Build() {
-	runV("go", "build", "-o", "ghamon", ".")
+	runV("go", "build", "-o", "bin/ghamon", "./cmd")
 }
 
 // Test runs the unit tests.
@@ -21,7 +21,7 @@ func Test() {
 
 // Clean removes build artifacts.
 func Clean() {
-	runV("rm", "ghamon")
+	runV("rm", "-rf", "bin")
 }
 
 func runV(cmd string, args ...string) error {

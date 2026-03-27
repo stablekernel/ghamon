@@ -1,4 +1,4 @@
-package main
+package ghamon
 
 import (
 	"flag"
@@ -6,7 +6,8 @@ import (
 	"os"
 )
 
-func main() {
+// Run is the main entry point for the ghamon application.
+func Run() {
 	var (
 		help     bool
 		rate     int
